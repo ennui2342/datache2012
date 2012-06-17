@@ -43,10 +43,6 @@
 				color:white;
 				background-color:black;
 			}
-			#gen:hover{
-				background-color:grey;
-				color:black;
-			}
 			textarea{
 				width:260px;
 				padding:10px;
@@ -66,9 +62,7 @@
 			
 			</div>
 			<div id="configArea">
-				<h2>Sidenotes</h2>
 				<div id="tog" class="btn">Toggle HeatmapOverlay</div>
-				<div id="gen" class="btn">Add 5 random lat/lng coordinates</div>
 			</div>
 			
 <div style="position:absolute;width:940px;top:750px;text-align:center;"><a href="http://www.patrick-wied.at/static/heatmapjs/">heatmap.js</a> by <a href="http://www.patrick-wied.at" target="_blank">Patrick Wied</a></div>
@@ -102,33 +96,74 @@ window.onload = function(){
 	  scaleControl: true,
 	  disableDoubleClickZoom: false
 	};
-	map = new google.maps.Map(document.getElementById("heatmapArea"), myOptions);
+  map = new google.maps.Map(document.getElementById("heatmapArea"), myOptions);
+
+  infowindow = new google.maps.InfoWindow(); 
 	
       $.each(testData.data, function(i,v) {
-        var myLatlng = new google.maps.LatLng(v.lat,v.lng);
         var marker = new google.maps.Marker({
-          position: myLatlng,
+          position: new google.maps.LatLng(v.lat,v.lng),
           map: map,
-          title: v.name + '(' + v.count + ')'
-          });
+          title: v.name,
+          data: {
+            checkins: v.count,
+            foursquare_id: v.foursquare_id
+          }
+        });
+
+        // Listen for click event  
+        google.maps.event.addListener(marker, 'click', function() { 
+          map.setCenter(new google.maps.LatLng(marker.position.lat(), marker.position.lng())); 
+          map.setZoom(15); 
+          onItemClick(event, marker); 
+        }); 
+
       });
 
+      // Info window trigger function 
+      function onItemClick(event, pin) { 
+        // Create content  
+        var info = $('<p>').append('<h1>' + pin.title + '</h1>' + pin.data.checkins + " checkins on foursquare<br/>"); 
+        $.ajax({
+          type: "GET",
+          dataType: "jsonp",
+          cache: false,
+          url: "https://api.instagram.com/v1/locations/search?foursquare_v2_id=" + pin.data.foursquare_id + "&client_id=92dff618eebd4eb497f9ea08a42ac2da",
+          success: function(data) {
+            if(data.data.length > 0) {
+              $.ajax({
+                type: "GET",
+                dataType: "jsonp",
+                cache: false,
+                url: "https://api.instagram.com/v1/locations/" + data.data[0].id + "/media/recent?client_id=92dff618eebd4eb497f9ea08a42ac2da",
+                success: function(data) {
+                  var c = data.data.length;
+                  if (c > 12) {
+                    c = 12;
+                  }
+                  for (var i = 0; i < c; i++) {
+                    info.append("<a target='_blank' href='" + data.data[i].link + "'><img width=100 height=100 src='" + data.data[i].images.low_resolution.url +"'></img></a>");
+                  }
+                  infowindow.setContent(info.html()); 
+                 infowindow.setPosition(pin.position); 
+                 infowindow.open(map) 
+                }
+              });
+            } else {
+              infowindow.setContent(info.html()); 
+              infowindow.setPosition(pin.position); 
+              infowindow.open(map) 
+            }
+          },
+          error: function(data) {
+            infowindow.setContent(info.html()); 
+            infowindow.setPosition(pin.position); 
+            infowindow.open(map) 
+          }
+        });
+      } 
 
 	heatmap = new HeatmapOverlay(map, {"radius":15, "visible":true, "opacity":60});
-	
-	document.getElementById("gen").onclick = function(){
-		var x = 5;
-		while(x--){
-		
-			var lat = Math.random()*180;
-			var lng = Math.random()*180;
-			var count = Math.floor(Math.random()*180+1);
-			
-			heatmap.addDataPoint(lat,lng,count);
-		
-		}
-	
-	};
 	
 	document.getElementById("tog").onclick = function(){
 		heatmap.toggle();
